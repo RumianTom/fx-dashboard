@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FX Rate Fixation Analysis</title>
+    <meta name="description" content="Interactive analysis of FX rate fixation window impact on GMV and margins for private transfer bookings.">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --bg-input: #334155;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --border: #334155;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary), #1a1a3e);
+            border-bottom: 1px solid var(--border);
+            padding: 1.5rem 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #a5b4fc, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.3rem;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .loading-overlay .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+        }
+
+        /* Controls Bar */
+        .controls {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .control-group label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .control-group select, .control-group input {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            min-width: 120px;
+        }
+
+        .control-group select:focus, .control-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        .target-margin {
+            margin-left: auto;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: var(--accent-hover);
+            font-weight: 600;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 2px solid var(--border);
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 0.8rem 1.2rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            white-space: nowrap;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .tab:hover { color: var(--text-secondary); }
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* KPI Cards */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .kpi-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.3rem;
+        }
+
+        .kpi-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .kpi-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        /* Chart containers */
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .chart-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+
+        .chart-box.full { grid-column: 1 / -1; }
+
+        .chart-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        .data-table th {
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            padding: 0.6rem 0.8rem;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+        }
+
+        .data-table td {
+            padding: 0.5rem 0.8rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .data-table tr:hover { background: rgba(99, 102, 241, 0.05); }
+
+        /* Toggle */
+        .toggle-row {
+            margin: 1rem 0;
+        }
+
+        .toggle-btn {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .toggle-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+
+        /* Scenario comparison */
+        .scenario-cols {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .scenario-col {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1rem;
+        }
+
+        .scenario-col h4 {
+            font-size: 0.95rem;
+            margin-bottom: 0.8rem;
+            color: var(--accent-hover);
+        }
+
+        /* Methodology */
+        .methodology h3 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.8rem;
+            color: var(--accent-hover);
+        }
+
+        .methodology h4 {
+            font-size: 0.95rem;
+            margin: 1.2rem 0 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .methodology p, .methodology li {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        .methodology table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.5rem 0 1rem;
+            font-size: 0.8rem;
+        }
+
+        .methodology table th {
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            padding: 0.5rem 0.8rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .methodology table td {
+            padding: 0.5rem 0.8rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+
+        .methodology code {
+            background: var(--bg-input);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+
+        .methodology pre {
+            background: var(--bg-input);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .methodology hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1.5rem 0;
+        }
+
+        /* Deep dive sub-controls */
+        .sub-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: flex-end;
+        }
+
+        @media (max-width: 768px) {
+            .controls { flex-direction: column; }
+            .chart-row { grid-template-columns: 1fr; }
+            .scenario-cols { grid-template-columns: 1fr; }
+            .container { padding: 1rem; }
+            .target-margin { margin-left: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <div style="color: var(--text-secondary); font-size: 0.9rem;">Loading analysis data...</div>
+</div>
+
+<div class="header">
+    <h1>💱 FX Rate Fixation Analysis</h1>
+    <p>Simulate how different FX rate fixation windows affect GMV and margins on private transfer bookings</p>
+</div>
+
+<div class="container">
+    <!-- Global Controls -->
+    <div class="controls">
+        <div class="control-group">
+            <label>FX Markup (%)</label>
+            <select id="ctrl-markup"></select>
+        </div>
+        <div class="control-group">
+            <label>Provider Fee (%)</label>
+            <select id="ctrl-fee"></select>
+        </div>
+        <div class="control-group">
+            <label>Mode</label>
+            <select id="ctrl-mode">
+                <option value="block">Block</option>
+                <option value="rolling">Rolling (per-customer)</option>
+            </select>
+        </div>
+        <div class="target-margin" id="target-margin">💰 Target margin: 2.00%</div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" id="tabs">
+        <div class="tab active" data-tab="comparison">📊 Window Comparison</div>
+        <div class="tab" data-tab="deepdive">🔍 Deep Dive</div>
+        <div class="tab" data-tab="routes">🗺️ Route Profitability</div>
+        <div class="tab" data-tab="fxrates">📈 FX Rates</div>
+        <div class="tab" data-tab="scenario">⚖️ Scenario Comparison</div>
+        <div class="tab" data-tab="methodology">📖 Methodology</div>
+    </div>
+
+    <!-- Tab: Comparison -->
+    <div class="tab-content active" id="tab-comparison">
+        <div class="kpi-row" id="comparison-kpis"></div>
+        <div class="chart-row">
+            <div class="chart-box"><div id="chart-margin-risk"></div></div>
+            <div class="chart-box"><div id="chart-gmv"></div></div>
+        </div>
+        <div class="chart-row">
+            <div class="chart-box full"><div id="chart-margin-bars"></div></div>
+        </div>
+        <div class="toggle-row">
+            <button class="toggle-btn" onclick="toggleTable('comparison-table')">Show raw comparison data</button>
+        </div>
+        <div id="comparison-table" style="display:none;"></div>
+    </div>
+
+    <!-- Tab: Deep Dive -->
+    <div class="tab-content" id="tab-deepdive">
+        <div class="sub-controls">
+            <div class="control-group">
+                <label>Fixation Window</label>
+                <select id="dd-window"></select>
+            </div>
+        </div>
+        <div class="kpi-row" id="dd-kpis"></div>
+        <div class="chart-row">
+            <div class="chart-box"><div id="chart-dd-margin-dist"></div></div>
+            <div class="chart-box"><div id="chart-dd-deviation-dist"></div></div>
+        </div>
+        <div class="chart-row">
+            <div class="chart-box"><div id="chart-dd-hourly-margin"></div></div>
+            <div class="chart-box"><div id="chart-dd-hourly-vol"></div></div>
+        </div>
+    </div>
+
+    <!-- Tab: Routes -->
+    <div class="tab-content" id="tab-routes">
+        <div class="sub-controls">
+            <div class="control-group">
+                <label>Fixation Window</label>
+                <select id="route-window"></select>
+            </div>
+        </div>
+        <div class="chart-row">
+            <div class="chart-box"><div id="chart-route-top20"></div></div>
+            <div class="chart-box"><div id="chart-route-treemap"></div></div>
+        </div>
+        <div class="toggle-row">
+            <button class="toggle-btn" onclick="toggleTable('route-table')">Show full route data</button>
+        </div>
+        <div id="route-table" style="display:none;"></div>
+    </div>
+
+    <!-- Tab: FX Rates -->
+    <div class="tab-content" id="tab-fxrates">
+        <div class="kpi-row" id="fx-kpis"></div>
+        <div class="chart-row">
+            <div class="chart-box full"><div id="chart-fx-rate"></div></div>
+        </div>
+        <div class="chart-row">
+            <div class="chart-box"><div id="chart-fx-volatility"></div></div>
+            <div class="chart-box"><div id="chart-fx-hourly"></div></div>
+        </div>
+    </div>
+
+    <!-- Tab: Scenario Comparison -->
+    <div class="tab-content" id="tab-scenario">
+        <div class="scenario-cols">
+            <div class="scenario-col">
+                <h4>Scenario A</h4>
+                <div class="control-group" style="margin-bottom:0.5rem;">
+                    <label>Window</label><select id="sc-a-window"></select>
+                </div>
+                <div class="control-group" style="margin-bottom:0.5rem;">
+                    <label>Markup %</label><select id="sc-a-markup"></select>
+                </div>
+                <div class="control-group">
+                    <label>Mode</label>
+                    <select id="sc-a-mode"><option value="block">Block</option><option value="rolling">Rolling</option></select>
+                </div>
+            </div>
+            <div class="scenario-col">
+                <h4>Scenario B</h4>
+                <div class="control-group" style="margin-bottom:0.5rem;">
+                    <label>Window</label><select id="sc-b-window"></select>
+                </div>
+                <div class="control-group" style="margin-bottom:0.5rem;">
+                    <label>Markup %</label><select id="sc-b-markup"></select>
+                </div>
+                <div class="control-group">
+                    <label>Mode</label>
+                    <select id="sc-b-mode"><option value="block">Block</option><option value="rolling">Rolling</option></select>
+                </div>
+            </div>
+        </div>
+        <button class="toggle-btn" style="background:var(--accent);color:white;border-color:var(--accent);padding:0.6rem 1.5rem;font-weight:600;width:100%;font-size:0.9rem;" onclick="runScenarioComparison()">🚀 Compare Scenarios</button>
+        <div id="scenario-results" style="margin-top:1rem;"></div>
+    </div>
+
+    <!-- Tab: Methodology -->
+    <div class="tab-content" id="tab-methodology">
+        <div class="methodology">
+            <h3>📖 How This Analysis Works</h3>
+            <p>Understanding the simulation model, assumptions, and parameters</p>
+            <hr>
+
+            <h4>💰 Pricing Model</h4>
+            <p>Every transaction follows this flow:</p>
+            <ol>
+                <li><strong>Base price</strong> is set in <strong>EUR</strong> (e.g. a transfer costs €300)</li>
+                <li><strong>Customer pays in USD</strong> → we convert using the <strong>FX rate</strong> + our 3% markup</li>
+                <li>The <strong>full customer payment is our GMV</strong> (the base price revenue goes to us)</li>
+                <li><strong>Provider cost</strong> is only the <strong>1% FX conversion fee</strong> they charge us</li>
+                <li><strong>Our FX margin</strong> = markup revenue (3%) − provider fee (1%) = <strong>2% target</strong></li>
+            </ol>
+            <table>
+                <tr><th>Step</th><th>Calculation</th><th>Amount</th></tr>
+                <tr><td>Base price</td><td>—</td><td>€300.00</td></tr>
+                <tr><td>Customer pays (GMV)</td><td>€300 × 1.18 × 1.03</td><td><strong>$364.62</strong></td></tr>
+                <tr><td>FX markup revenue</td><td>€300 × 1.18 × 0.03</td><td><strong>$10.62</strong></td></tr>
+                <tr><td>Provider FX fee</td><td>€300 × 1.18 × 0.01</td><td><strong>$3.54</strong></td></tr>
+                <tr><td><strong>Our FX margin</strong></td><td>$10.62 − $3.54</td><td><strong>$7.08 (1.94%)</strong></td></tr>
+            </table>
+            <p>The <strong>risk</strong> from holding a fixed FX rate is that the real rate moves — if EUR strengthens, our fixed rate was too low and the provider charges us more for the conversion.</p>
+            <hr>
+
+            <h4>⏱️ What Is a Fixation Window?</h4>
+            <p>The FX provider gives us a new EUR/USD rate every <strong>15 seconds</strong>. We <strong>fix</strong> (hold) the rate for a longer period to show customers consistent pricing.</p>
+            <table>
+                <tr><th>Window</th><th>Meaning</th></tr>
+                <tr><td>15 seconds</td><td>Use the provider's rate as-is (baseline)</td></tr>
+                <tr><td>1 hour</td><td>Refresh our displayed rate every hour</td></tr>
+                <tr><td>12 hours</td><td>Refresh twice a day</td></tr>
+                <tr><td>24 hours</td><td>One fixed rate per day</td></tr>
+            </table>
+            <hr>
+
+            <h4>🔄 Block Mode vs Rolling Mode</h4>
+            <table>
+                <tr><th>Block Mode (default)</th><th>Rolling Mode (per-customer)</th></tr>
+                <tr>
+                    <td>Timeline divided into fixed blocks. Everyone in the same block sees the same rate.<br><pre>┌──────────┐┌──────────┐
+│ Block 1  ││ Block 2  │
+│ Rate: A  ││ Rate: B  │
+│ 00:00-   ││ 12:00-   │
+│ 12:00    ││ 24:00    │
+└──────────┘└──────────┘</pre></td>
+                    <td>Each customer's rate is fixed from the moment they start browsing. Individual clocks.<br><pre>Customer A: ●━━━━━━● (12h)
+Customer B:    ●━━━━━━● (12h)
+Customer C:       ●━━━━━━●</pre></td>
+                </tr>
+            </table>
+            <hr>
+
+            <h4>🕐 When Do Customers Book?</h4>
+            <p>Transactions follow a realistic US customer pattern (70% of clients):</p>
+            <table>
+                <tr><th>Time (UTC)</th><th>US Time (EST)</th><th>Volume</th></tr>
+                <tr><td>04:00–06:00</td><td>11 PM–1 AM</td><td>🟥 Very low (~2%)</td></tr>
+                <tr><td>06:00–12:00</td><td>1 AM–7 AM</td><td>🟧 Low (5–22%)</td></tr>
+                <tr><td>12:00–14:00</td><td>7 AM–9 AM</td><td>🟨 Ramping up (30–45%)</td></tr>
+                <tr><td><strong>14:00–17:00</strong></td><td><strong>9 AM–12 PM</strong></td><td>🟩 <strong>Peak (70–100%)</strong></td></tr>
+                <tr><td>18:00–20:00</td><td>1 PM–3 PM</td><td>🟨 Still busy (65–90%)</td></tr>
+                <tr><td>20:00–00:00</td><td>3 PM–7 PM</td><td>🟧 Winding down (8–35%)</td></tr>
+            </table>
+            <p><strong>Weekends</strong> have <strong>30% fewer</strong> transactions than weekdays.</p>
+            <hr>
+
+            <h4>📊 Key Metrics Explained</h4>
+            <table>
+                <tr><th>Metric</th><th>What It Measures</th></tr>
+                <tr><td><strong>Avg Margin %</strong></td><td>Mean margin across all transactions (target: markup − provider fee)</td></tr>
+                <tr><td><strong>Margin at Risk %</strong></td><td>% of transactions where margin falls below 50% of target</td></tr>
+                <tr><td><strong>Negative Margin Txn</strong></td><td>Transactions where we lost money</td></tr>
+                <tr><td><strong>Total GMV</strong></td><td>Gross Merchandise Volume — total USD collected</td></tr>
+                <tr><td><strong>Total Margin</strong></td><td>Sum of all transaction margins in USD</td></tr>
+            </table>
+            <hr>
+
+            <h4>📂 Data Sources</h4>
+            <table>
+                <tr><th>Data</th><th>Source</th><th>Details</th></tr>
+                <tr><td><strong>FX Rates</strong></td><td>ECB via Frankfurter API</td><td>90 days daily EUR/USD + synthetic 15-min intraday</td></tr>
+                <tr><td><strong>Routes</strong></td><td>Synthetic</td><td>5,000 routes, €50–€1,000 (avg ~€300)</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Global State ──────────────────────────────
+let DATA = null;
+const PLOTLY_LAYOUT = {
+    paper_bgcolor: '#1e293b',
+    plot_bgcolor: '#1e293b',
+    font: { color: '#94a3b8', family: 'Inter', size: 12 },
+    margin: { l: 50, r: 30, t: 35, b: 40 },
+    xaxis: { gridcolor: '#334155', zerolinecolor: '#334155' },
+    yaxis: { gridcolor: '#334155', zerolinecolor: '#334155' },
+};
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+const COLORS = {
+    blue: '#6366f1',
+    lightBlue: '#818cf8',
+    orange: '#f59e0b',
+    green: '#22c55e',
+    red: '#ef4444',
+    purple: '#a855f7',
+    teal: '#14b8a6',
+    pink: '#ec4899',
+};
+
+// ── Data Loading ──────────────────────────────
+async function loadData() {
+    const resp = await fetch('data/scenarios.json');
+    DATA = await resp.json();
+    initControls();
+    document.getElementById('loading').style.display = 'none';
+    renderAll();
+}
+
+// ── Control Setup ─────────────────────────────
+function initControls() {
+    const grid = DATA.parameter_grid;
+    const mkSel = document.getElementById('ctrl-markup');
+    grid.markups.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m + '%';
+        if (m === 3) opt.selected = true;
+        mkSel.appendChild(opt);
+    });
+
+    const feeSel = document.getElementById('ctrl-fee');
+    grid.provider_fees.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f; opt.textContent = f + '%';
+        if (f === 1) opt.selected = true;
+        feeSel.appendChild(opt);
+    });
+
+    // Window selectors for Deep Dive, Routes, and Scenarios
+    ['dd-window', 'route-window', 'sc-a-window', 'sc-b-window'].forEach(id => {
+        const sel = document.getElementById(id);
+        grid.windows.forEach((w, i) => {
+            const opt = document.createElement('option');
+            opt.value = w; opt.textContent = w;
+            if (w === '1h') opt.selected = true;
+            sel.appendChild(opt);
+        });
+    });
+
+    // Scenario markup selectors
+    ['sc-a-markup', 'sc-b-markup'].forEach(id => {
+        const sel = document.getElementById(id);
+        grid.markups.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m; opt.textContent = m + '%';
+            if (m === 3) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    });
+
+    // Event listeners
+    mkSel.addEventListener('change', renderAll);
+    feeSel.addEventListener('change', renderAll);
+    document.getElementById('ctrl-mode').addEventListener('change', renderAll);
+    document.getElementById('dd-window').addEventListener('change', renderDeepDive);
+    document.getElementById('route-window').addEventListener('change', renderRoutes);
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            const tabEl = document.getElementById('tab-' + tab.dataset.tab);
+            tabEl.classList.add('active');
+            // Resize Plotly charts now that the container is visible
+            setTimeout(() => {
+                tabEl.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
+            }, 50);
+        });
+    });
+}
+
+// ── Helpers ───────────────────────────────────
+function getGlobalParams() {
+    return {
+        markup: parseFloat(document.getElementById('ctrl-markup').value),
+        fee: parseFloat(document.getElementById('ctrl-fee').value),
+        mode: document.getElementById('ctrl-mode').value,
+    };
+}
+
+function findScenario(window, markup, fee, mode) {
+    return DATA.scenarios.find(s =>
+        s.window === window &&
+        s.markup_pct === markup &&
+        s.provider_fee_pct === fee &&
+        s.mode === mode
+    );
+}
+
+function getFilteredScenarios() {
+    const p = getGlobalParams();
+    return DATA.scenarios.filter(s =>
+        s.markup_pct === p.markup &&
+        s.provider_fee_pct === p.fee &&
+        s.mode === p.mode
+    ).sort((a, b) => a.window_min - b.window_min);
+}
+
+function fmt$(n) { return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+function fmtPct(n) { return n.toFixed(2) + '%'; }
+
+function makeKPI(label, value, sub) {
+    return `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
+}
+
+// ── Render All ────────────────────────────────
+function renderAll() {
+    const p = getGlobalParams();
+    document.getElementById('target-margin').textContent = `💰 Target margin: ${(p.markup - p.fee).toFixed(2)}%`;
+    renderComparison();
+    renderDeepDive();
+    renderRoutes();
+    renderFXRates();
+}
+
+// ── Tab: Comparison ───────────────────────────
+function renderComparison() {
+    const scenarios = getFilteredScenarios();
+    if (!scenarios.length) return;
+
+    const best = scenarios.reduce((a, b) => a.avg_margin_pct > b.avg_margin_pct ? a : b);
+    const worst = scenarios.reduce((a, b) => a.margin_at_risk_pct > b.margin_at_risk_pct ? a : b);
+
+    document.getElementById('comparison-kpis').innerHTML =
+        makeKPI('Best Avg Margin', fmtPct(best.avg_margin_pct), best.window) +
+        makeKPI('Highest Risk', fmtPct(worst.margin_at_risk_pct), worst.window) +
+        makeKPI('Total GMV', fmt$(best.total_gmv), best.total_transactions.toLocaleString() + ' txn') +
+        makeKPI('Total Margin', fmt$(best.total_margin), '');
+
+    const windows = scenarios.map(s => s.window);
+
+    // Margin vs Risk chart
+    Plotly.newPlot('chart-margin-risk', [
+        { x: windows, y: scenarios.map(s => s.avg_margin_pct), type: 'bar', name: 'Avg Margin %', marker: { color: COLORS.blue } },
+        { x: windows, y: scenarios.map(s => s.margin_at_risk_pct), type: 'scatter', mode: 'lines+markers', name: 'Margin at Risk %', yaxis: 'y2', line: { color: COLORS.orange, width: 2 }, marker: { size: 6 } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Average Margin vs Risk by Fixation Window', font: { size: 14 } },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Avg Margin %' },
+        yaxis2: { title: 'Margin at Risk %', overlaying: 'y', side: 'right', gridcolor: 'transparent' },
+        legend: { x: 0.7, y: 1.15, orientation: 'h' },
+    }, PLOTLY_CONFIG);
+
+    // GMV chart
+    Plotly.newPlot('chart-gmv', [
+        { x: windows, y: scenarios.map(s => s.total_gmv), type: 'bar', marker: { color: COLORS.teal } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Total GMV (USD) by Fixation Window', font: { size: 14 } },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'GMV (USD)' },
+    }, PLOTLY_CONFIG);
+
+    // Margin breakdown bar
+    Plotly.newPlot('chart-margin-bars', [
+        { x: windows, y: scenarios.map(s => s.total_margin), type: 'bar', name: 'Total Margin $', marker: { color: COLORS.purple } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Total Margin (USD) by Fixation Window', font: { size: 14 } },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Margin (USD)' },
+    }, PLOTLY_CONFIG);
+
+    // Raw data table
+    let html = '<table class="data-table"><tr><th>Window</th><th>Total GMV</th><th>Total Margin</th><th>Avg Margin %</th><th>Margin at Risk %</th><th>Negative Txn</th></tr>';
+    scenarios.forEach(s => {
+        html += `<tr><td>${s.window}</td><td>${fmt$(s.total_gmv)}</td><td>${fmt$(s.total_margin)}</td><td>${fmtPct(s.avg_margin_pct)}</td><td>${fmtPct(s.margin_at_risk_pct)}</td><td>${s.negative_margin_txn}</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById('comparison-table').innerHTML = html;
+}
+
+// ── Tab: Deep Dive ────────────────────────────
+function renderDeepDive() {
+    const p = getGlobalParams();
+    const window = document.getElementById('dd-window').value;
+    const s = findScenario(window, p.markup, p.fee, p.mode);
+    if (!s) return;
+
+    document.getElementById('dd-kpis').innerHTML =
+        makeKPI('Avg Margin', fmtPct(s.avg_margin_pct), 'vs ' + (p.markup - p.fee).toFixed(2) + '% target') +
+        makeKPI('Margin at Risk', fmtPct(s.margin_at_risk_pct), '') +
+        makeKPI('GMV', fmt$(s.total_gmv), s.total_transactions.toLocaleString() + ' txn') +
+        makeKPI('Negative Margin', s.negative_margin_txn.toString(), 'transactions');
+
+    // Margin distribution
+    const md = s.margin_distribution;
+    const mdX = md.edges.slice(0, -1).map((e, i) => ((e + md.edges[i + 1]) / 2));
+    Plotly.newPlot('chart-dd-margin-dist', [
+        { x: mdX, y: md.counts, type: 'bar', marker: { color: COLORS.blue } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Margin Distribution (%)', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Margin %' },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Transactions' },
+    }, PLOTLY_CONFIG);
+
+    // Deviation distribution
+    const dd = s.deviation_distribution;
+    const ddX = dd.edges.slice(0, -1).map((e, i) => ((e + dd.edges[i + 1]) / 2));
+    Plotly.newPlot('chart-dd-deviation-dist', [
+        { x: ddX, y: dd.counts, type: 'bar', marker: { color: COLORS.orange } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Rate Deviation Distribution (%)', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Deviation from fixed rate %' },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Transactions' },
+    }, PLOTLY_CONFIG);
+
+    // Hourly margin
+    const hours = s.hourly.map(h => h.hour);
+    Plotly.newPlot('chart-dd-hourly-margin', [
+        { x: hours, y: s.hourly.map(h => h.avg_margin_pct), type: 'scatter', mode: 'lines+markers', line: { color: COLORS.green, width: 2 }, marker: { size: 5 } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Average Margin by Hour (UTC)', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 2 },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Avg Margin %' },
+    }, PLOTLY_CONFIG);
+
+    // Hourly volatility
+    Plotly.newPlot('chart-dd-hourly-vol', [
+        { x: hours, y: s.hourly.map(h => h.volatility * 100), type: 'bar', marker: { color: COLORS.red, opacity: 0.7 } },
+        { x: hours, y: s.hourly.map(h => h.transaction_count), type: 'scatter', mode: 'lines+markers', name: 'Transactions', yaxis: 'y2', line: { color: COLORS.teal, width: 2 }, marker: { size: 4 } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Rate Volatility & Transaction Volume by Hour', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 2 },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Volatility %' },
+        yaxis2: { title: 'Transactions', overlaying: 'y', side: 'right', gridcolor: 'transparent' },
+        showlegend: false,
+    }, PLOTLY_CONFIG);
+}
+
+// ── Tab: Routes ───────────────────────────────
+function renderRoutes() {
+    const p = getGlobalParams();
+    const window = document.getElementById('route-window').value;
+    const s = findScenario(window, p.markup, p.fee, p.mode);
+    if (!s) return;
+
+    const top = s.top_routes.slice(0, 20);
+
+    // Top 20 routes bar
+    Plotly.newPlot('chart-route-top20', [
+        { y: top.map(r => r.route).reverse(), x: top.map(r => r.total_gmv).reverse(), type: 'bar', orientation: 'h', marker: { color: COLORS.blue } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Top 20 Routes by GMV', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'GMV (USD)' },
+        margin: { ...PLOTLY_LAYOUT.margin, l: 140 },
+        height: 500,
+    }, PLOTLY_CONFIG);
+
+    // Country treemap
+    const countries = s.countries;
+    Plotly.newPlot('chart-route-treemap', [{
+        type: 'treemap',
+        labels: countries.map(c => c.country),
+        parents: countries.map(() => ''),
+        values: countries.map(c => c.total_gmv),
+        text: countries.map(c => `${c.country}<br>GMV: ${fmt$(c.total_gmv)}<br>Margin: ${fmtPct(c.avg_margin_pct)}`),
+        textinfo: 'label+text',
+        marker: { colors: countries.map(c => c.avg_margin_pct), colorscale: 'Viridis', showscale: true, colorbar: { title: 'Margin %', ticksuffix: '%' } },
+    }], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'GMV by Destination Country', font: { size: 14 } },
+        height: 500,
+    }, PLOTLY_CONFIG);
+
+    // Route table
+    let html = '<table class="data-table"><tr><th>Route</th><th>Country</th><th>Avg Price €</th><th>Avg Margin %</th><th>GMV</th><th>Margin</th><th>Txn</th></tr>';
+    s.top_routes.forEach(r => {
+        html += `<tr><td>${r.route}</td><td>${r.country}</td><td>€${r.avg_price_eur}</td><td>${fmtPct(r.avg_margin_pct)}</td><td>${fmt$(r.total_gmv)}</td><td>${fmt$(r.total_margin)}</td><td>${r.txn_count}</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById('route-table').innerHTML = html;
+}
+
+// ── Tab: FX Rates ─────────────────────────────
+function renderFXRates() {
+    if (!DATA.fx_rates) return;
+
+    const rates = DATA.fx_rates;
+    const len = rates.length;
+    const timestamps = new Array(len);
+    const values = new Array(len);
+    for (let i = 0; i < len; i++) {
+        timestamps[i] = rates[i].timestamp;
+        values[i] = rates[i].rate;
+    }
+
+    // KPIs — avoid Math.min/max spread on 6k elements (stack overflow)
+    let min = values[0], max = values[0], sum = 0;
+    for (let i = 0; i < len; i++) {
+        if (values[i] < min) min = values[i];
+        if (values[i] > max) max = values[i];
+        sum += values[i];
+    }
+    const avg = sum / len;
+
+    document.getElementById('fx-kpis').innerHTML =
+        makeKPI('Data Points', len.toLocaleString(), '') +
+        makeKPI('Rate Range', `${min.toFixed(4)} – ${max.toFixed(4)}`, '') +
+        makeKPI('Average Rate', avg.toFixed(4), '') +
+        makeKPI('Period', `${timestamps[0].split('T')[0]} → ${timestamps[len - 1].split('T')[0]}`, '');
+
+    // Moving averages with simple loop
+    function movingAvg(arr, n) {
+        const result = new Array(arr.length);
+        let runSum = 0;
+        for (let i = 0; i < arr.length; i++) {
+            runSum += arr[i];
+            if (i >= n) runSum -= arr[i - n];
+            const count = Math.min(i + 1, n);
+            result[i] = runSum / count;
+        }
+        return result;
+    }
+
+    Plotly.newPlot('chart-fx-rate', [
+        { x: timestamps, y: values, type: 'scattergl', mode: 'lines', name: 'EUR/USD (15-min)', line: { color: COLORS.blue, width: 1 } },
+        { x: timestamps, y: movingAvg(values, 4), type: 'scattergl', mode: 'lines', name: '1h MA', line: { color: COLORS.green, width: 1.5 } },
+        { x: timestamps, y: movingAvg(values, 96), type: 'scattergl', mode: 'lines', name: '24h MA', line: { color: COLORS.orange, width: 2 } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'EUR/USD Exchange Rate (90 Days, 15-min intervals)', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Date' },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'EUR/USD Rate', tickformat: '.4f', hoverformat: '.6f' },
+        legend: { x: 0.65, y: 1.15, orientation: 'h' },
+        margin: { l: 70, r: 30, t: 45, b: 40 },
+        height: 400,
+    }, PLOTLY_CONFIG);
+
+    // Calculate returns (% changes)
+    const returns = new Array(len);
+    returns[0] = 0;
+    for (let i = 1; i < len; i++) {
+        returns[i] = (values[i] - values[i - 1]) / values[i - 1];
+    }
+
+    // Rolling volatility (24h = 96 points, std dev of returns)
+    const vol = new Array(len);
+    for (let i = 0; i < len; i++) {
+        const start = Math.max(1, i - 95);
+        const end = i + 1;
+        const n = end - start;
+        if (n < 2) { vol[i] = 0; continue; }
+        let s = 0;
+        for (let j = start; j < end; j++) s += returns[j];
+        const m = s / n;
+        let v = 0;
+        for (let j = start; j < end; j++) v += (returns[j] - m) ** 2;
+        vol[i] = Math.sqrt(v / n) * 100;
+    }
+
+    Plotly.newPlot('chart-fx-volatility', [
+        { x: timestamps, y: vol, type: 'scattergl', mode: 'lines', fill: 'tozeroy', line: { color: COLORS.red, width: 1 }, fillcolor: 'rgba(239,68,68,0.15)' },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: '24h Rolling Volatility', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Date' },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Volatility (%)', tickformat: '.3f' },
+        margin: { l: 60, r: 30, t: 45, b: 40 },
+        height: 300,
+    }, PLOTLY_CONFIG);
+
+    // Hourly intraday volatility bar chart
+    const hourlyRetSum = new Array(24).fill(0);
+    const hourlyCount = new Array(24).fill(0);
+    for (let i = 1; i < len; i++) {
+        const d = new Date(timestamps[i]);
+        const h = d.getUTCHours();
+        hourlyRetSum[h] += Math.abs(returns[i]);
+        hourlyCount[h]++;
+    }
+    const avgHourlyVol = new Array(24);
+    let avgTotal = 0;
+    for (let h = 0; h < 24; h++) {
+        avgHourlyVol[h] = hourlyCount[h] > 0 ? (hourlyRetSum[h] / hourlyCount[h]) * 100 : 0;
+        avgTotal += avgHourlyVol[h];
+    }
+    const avgThreshold = avgTotal / 24;
+    const barColors = new Array(24);
+    for (let h = 0; h < 24; h++) {
+        barColors[h] = avgHourlyVol[h] > avgThreshold ? COLORS.orange : COLORS.green;
+    }
+
+    Plotly.newPlot('chart-fx-hourly', [
+        { x: Array.from({ length: 24 }, (_, i) => i), y: avgHourlyVol, type: 'bar', marker: { color: barColors } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Avg Intraday Volatility by Hour (UTC)', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 1 },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Volatility (%)', tickformat: '.4f' },
+        margin: { l: 60, r: 30, t: 45, b: 40 },
+        height: 300,
+    }, PLOTLY_CONFIG);
+}
+
+// ── Tab: Scenario Comparison ──────────────────
+function runScenarioComparison() {
+    const fee = parseFloat(document.getElementById('ctrl-fee').value);
+    const sA = findScenario(
+        document.getElementById('sc-a-window').value,
+        parseFloat(document.getElementById('sc-a-markup').value),
+        fee,
+        document.getElementById('sc-a-mode').value
+    );
+    const sB = findScenario(
+        document.getElementById('sc-b-window').value,
+        parseFloat(document.getElementById('sc-b-markup').value),
+        fee,
+        document.getElementById('sc-b-mode').value
+    );
+
+    if (!sA || !sB) {
+        document.getElementById('scenario-results').innerHTML = '<p style="color:var(--danger);">Scenario not found in pre-computed data. Try different parameters.</p>';
+        return;
+    }
+
+    const metrics = [
+        { label: 'Total GMV', a: fmt$(sA.total_gmv), b: fmt$(sB.total_gmv) },
+        { label: 'Total Margin', a: fmt$(sA.total_margin), b: fmt$(sB.total_margin) },
+        { label: 'Avg Margin %', a: fmtPct(sA.avg_margin_pct), b: fmtPct(sB.avg_margin_pct) },
+        { label: 'Margin at Risk %', a: fmtPct(sA.margin_at_risk_pct), b: fmtPct(sB.margin_at_risk_pct) },
+        { label: 'Negative Margin Txn', a: sA.negative_margin_txn, b: sB.negative_margin_txn },
+    ];
+
+    let html = '<table class="data-table"><tr><th>Metric</th><th>Scenario A</th><th>Scenario B</th><th>Difference</th></tr>';
+    metrics.forEach(m => {
+        const aVal = parseFloat(String(m.a).replace(/[$,%]/g, ''));
+        const bVal = parseFloat(String(m.b).replace(/[$,%]/g, ''));
+        const diff = bVal - aVal;
+        const diffStr = diff > 0 ? '+' + diff.toFixed(2) : diff.toFixed(2);
+        const color = diff > 0 ? COLORS.green : diff < 0 ? COLORS.red : '';
+        html += `<tr><td><strong>${m.label}</strong></td><td>${m.a}</td><td>${m.b}</td><td style="color:${color}">${diffStr}</td></tr>`;
+    });
+    html += '</table>';
+
+    // Add charts
+    html += '<div class="chart-row" style="margin-top:1rem;"><div class="chart-box"><div id="chart-sc-hourly"></div></div><div class="chart-box"><div id="chart-sc-margins"></div></div></div>';
+
+    document.getElementById('scenario-results').innerHTML = html;
+
+    // Hourly comparison
+    Plotly.newPlot('chart-sc-hourly', [
+        { x: sA.hourly.map(h => h.hour), y: sA.hourly.map(h => h.avg_margin_pct), name: 'A: ' + sA.window, type: 'scatter', mode: 'lines+markers', line: { color: COLORS.blue }, marker: { size: 5 } },
+        { x: sB.hourly.map(h => h.hour), y: sB.hourly.map(h => h.avg_margin_pct), name: 'B: ' + sB.window, type: 'scatter', mode: 'lines+markers', line: { color: COLORS.orange }, marker: { size: 5 } },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Hourly Margin Comparison', font: { size: 14 } },
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 2 },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Avg Margin %' },
+        legend: { x: 0, y: 1.15, orientation: 'h' },
+    }, PLOTLY_CONFIG);
+
+    // Margin distribution comparison
+    const mdA = sA.margin_distribution;
+    const mdB = sB.margin_distribution;
+    const mdAx = mdA.edges.slice(0, -1).map((e, i) => ((e + mdA.edges[i + 1]) / 2));
+    const mdBx = mdB.edges.slice(0, -1).map((e, i) => ((e + mdB.edges[i + 1]) / 2));
+    Plotly.newPlot('chart-sc-margins', [
+        { x: mdAx, y: mdA.counts, name: 'A', type: 'bar', marker: { color: COLORS.blue }, opacity: 0.6 },
+        { x: mdBx, y: mdB.counts, name: 'B', type: 'bar', marker: { color: COLORS.orange }, opacity: 0.6 },
+    ], {
+        ...PLOTLY_LAYOUT,
+        title: { text: 'Margin Distribution Comparison', font: { size: 14 } },
+        barmode: 'overlay',
+        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Margin %' },
+        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Transactions' },
+        legend: { x: 0, y: 1.15, orientation: 'h' },
+    }, PLOTLY_CONFIG);
+}
+
+// ── Utilities ─────────────────────────────────
+function toggleTable(id) {
+    const el = document.getElementById(id);
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ── Init ──────────────────────────────────────
+loadData();
+</script>
+
+</body>
+</html>

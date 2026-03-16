@@ -694,10 +694,8 @@ function initControls() {
             tab.classList.add('active');
             const tabEl = document.getElementById('tab-' + tab.dataset.tab);
             tabEl.classList.add('active');
-            // Resize Plotly charts now that the container is visible
-            setTimeout(() => {
-                tabEl.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
-            }, 50);
+            // Render the newly visible tab
+            renderActiveTab(tab.dataset.tab);
         });
     });
 }
@@ -740,10 +738,19 @@ function makeKPI(label, value, sub) {
 function renderAll() {
     const p = getGlobalParams();
     document.getElementById('target-margin').textContent = `💰 Target margin: ${(p.markup - p.fee).toFixed(2)}%`;
-    renderComparison();
-    renderDeepDive();
-    renderRoutes();
-    renderFXRates();
+    // Only render the currently active tab
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab) renderActiveTab(activeTab.dataset.tab);
+}
+
+function renderActiveTab(tabName) {
+    switch (tabName) {
+        case 'comparison': renderComparison(); break;
+        case 'deepdive': renderDeepDive(); break;
+        case 'routes': renderRoutes(); break;
+        case 'fxrates': renderFXRates(); break;
+        // scenario and methodology don't need re-rendering on param change
+    }
 }
 
 // ── Tab: Comparison ───────────────────────────

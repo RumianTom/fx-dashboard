@@ -743,12 +743,22 @@ function renderAll() {
     if (activeTab) renderActiveTab(activeTab.dataset.tab);
 }
 
+let _fxRendered = false;
 function renderActiveTab(tabName) {
     switch (tabName) {
         case 'comparison': renderComparison(); break;
         case 'deepdive': renderDeepDive(); break;
         case 'routes': renderRoutes(); break;
-        case 'fxrates': renderFXRates(); break;
+        case 'fxrates':
+            if (!_fxRendered) {
+                renderFXRates();
+                _fxRendered = true;
+            } else {
+                // Just resize existing charts — don't re-render
+                const tabEl = document.getElementById('tab-fxrates');
+                tabEl.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
+            }
+            break;
         // scenario and methodology don't need re-rendering on param change
     }
 }

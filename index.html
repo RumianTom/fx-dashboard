@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FX Rate Fixation Analysis</title>
     <meta name="description" content="Interactive analysis of FX rate fixation window impact on GMV and margins for private transfer bookings.">
-    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -45,6 +46,7 @@
             font-weight: 700;
             background: linear-gradient(135deg, #a5b4fc, #6366f1);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -83,7 +85,6 @@
             padding: 1rem 2rem;
         }
 
-        /* Controls Bar */
         .controls {
             background: var(--bg-secondary);
             border: 1px solid var(--border);
@@ -103,29 +104,22 @@
         }
 
         .control-group label {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: var(--text-secondary);
+            font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
         }
 
-        .control-group select, .control-group input {
+        select {
             background: var(--bg-input);
-            border: 1px solid var(--border);
             color: var(--text-primary);
-            padding: 0.5rem 0.8rem;
-            border-radius: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.4rem 0.6rem;
             font-size: 0.85rem;
-            font-family: 'Inter', sans-serif;
-            cursor: pointer;
-            min-width: 120px;
-        }
-
-        .control-group select:focus, .control-group input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+            font-family: inherit;
+            min-width: 100px;
         }
 
         .target-margin {
@@ -139,7 +133,6 @@
             font-weight: 600;
         }
 
-        /* Tabs */
         .tabs {
             display: flex;
             gap: 0;
@@ -167,27 +160,9 @@
             border-bottom-color: var(--accent);
         }
 
-        .tab-panels {
-            position: relative;
-            width: 100%;
-        }
-        .tab-content {
-            opacity: 0;
-            position: absolute;
-            left: 0;
-            top: 0;
-            pointer-events: none;
-            width: 100%;
-            z-index: 0;
-        }
-        .tab-content.active {
-            opacity: 1;
-            position: relative;
-            pointer-events: auto;
-            z-index: 1;
-        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
 
-        /* KPI Cards */
         .kpi-row {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -198,32 +173,31 @@
         .kpi-card {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 1rem;
+            border-radius: 12px;
+            padding: 1rem 1.2rem;
             text-align: center;
         }
 
         .kpi-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
+            font-size: 0.7rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.3rem;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: 600;
         }
 
         .kpi-value {
             font-size: 1.5rem;
             font-weight: 700;
+            margin: 0.3rem 0;
             color: var(--text-primary);
         }
 
         .kpi-sub {
             font-size: 0.75rem;
-            color: var(--text-muted);
-            margin-top: 0.2rem;
+            color: var(--text-secondary);
         }
 
-        /* Chart containers */
         .chart-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -234,63 +208,62 @@
         .chart-box {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 1rem;
+            position: relative;
         }
 
         .chart-box.full { grid-column: 1 / -1; }
 
-        .chart-title {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 0.5rem;
+        .chart-box canvas {
+            width: 100% !important;
+            max-height: 350px;
         }
 
-        /* Tables */
+        .chart-box.full canvas {
+            max-height: 400px;
+        }
+
+        .sub-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .toggle-row {
+            margin: 0.5rem 0 1.5rem;
+        }
+
+        .toggle-btn {
+            padding: 0.4rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
         .data-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .data-table th, .data-table td {
+            padding: 0.5rem 0.8rem;
+            border: 1px solid var(--border);
+            text-align: left;
         }
 
         .data-table th {
             background: var(--bg-input);
             color: var(--text-secondary);
-            padding: 0.6rem 0.8rem;
-            text-align: left;
             font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.7rem;
-            letter-spacing: 0.05em;
         }
 
-        .data-table td {
-            padding: 0.5rem 0.8rem;
-            border-top: 1px solid var(--border);
-        }
-
-        .data-table tr:hover { background: rgba(99, 102, 241, 0.05); }
-
-        /* Toggle */
-        .toggle-row {
-            margin: 1rem 0;
-        }
-
-        .toggle-btn {
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 0.4rem 0.8rem;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            font-family: 'Inter', sans-serif;
-        }
-
-        .toggle-btn:hover { border-color: var(--accent); color: var(--text-primary); }
-
-        /* Scenario comparison */
         .scenario-cols {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -301,93 +274,35 @@
         .scenario-col {
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 1rem;
         }
 
         .scenario-col h4 {
-            font-size: 0.95rem;
             margin-bottom: 0.8rem;
             color: var(--accent-hover);
         }
 
-        /* Methodology */
-        .methodology h3 {
-            font-size: 1.1rem;
-            margin: 1.5rem 0 0.8rem;
-            color: var(--accent-hover);
+        .methodology {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            line-height: 1.8;
         }
 
-        .methodology h4 {
-            font-size: 0.95rem;
-            margin: 1.2rem 0 0.5rem;
-            color: var(--text-primary);
-        }
-
-        .methodology p, .methodology li {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            line-height: 1.7;
-        }
-
-        .methodology table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 0.5rem 0 1rem;
-            font-size: 0.8rem;
-        }
-
-        .methodology table th {
-            background: var(--bg-input);
-            color: var(--text-secondary);
-            padding: 0.5rem 0.8rem;
-            text-align: left;
-            font-weight: 600;
-        }
-
-        .methodology table td {
-            padding: 0.5rem 0.8rem;
-            border-top: 1px solid var(--border);
-            color: var(--text-secondary);
-        }
-
-        .methodology code {
-            background: var(--bg-input);
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-        }
-
-        .methodology pre {
-            background: var(--bg-input);
-            padding: 1rem;
-            border-radius: 8px;
-            overflow-x: auto;
-            margin: 0.5rem 0;
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .methodology hr {
-            border: none;
-            border-top: 1px solid var(--border);
-            margin: 1.5rem 0;
-        }
-
-        /* Deep dive sub-controls */
-        .sub-controls {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1rem;
-            align-items: flex-end;
-        }
+        .methodology h3 { margin-bottom: 0.5rem; }
+        .methodology h4 { margin-top: 1.5rem; margin-bottom: 0.5rem; color: var(--accent-hover); }
+        .methodology hr { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+        .methodology table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+        .methodology th, .methodology td { padding: 0.5rem 0.8rem; border: 1px solid var(--border); text-align: left; }
+        .methodology th { background: var(--bg-input); }
+        .methodology pre { background: var(--bg-input); padding: 0.5rem; border-radius: 6px; font-size: 0.75rem; overflow-x: auto; margin: 0.3rem 0; }
 
         @media (max-width: 768px) {
-            .controls { flex-direction: column; }
             .chart-row { grid-template-columns: 1fr; }
             .scenario-cols { grid-template-columns: 1fr; }
-            .container { padding: 1rem; }
-            .target-margin { margin-left: 0; }
+            .container { padding: 0.5rem 1rem; }
         }
     </style>
 </head>
@@ -395,7 +310,7 @@
 
 <div class="loading-overlay" id="loading">
     <div class="spinner"></div>
-    <div style="color: var(--text-secondary); font-size: 0.9rem;">Loading analysis data...</div>
+    <div style="color: var(--text-secondary);">Loading FX analysis data…</div>
 </div>
 
 <div class="header">
@@ -404,27 +319,29 @@
 </div>
 
 <div class="container">
-    <!-- Global Controls -->
     <div class="controls">
         <div class="control-group">
             <label>FX Markup (%)</label>
-            <select id="ctrl-markup"></select>
+            <select id="ctrl-markup">
+                <option value="1">1%</option><option value="2">2%</option><option value="3" selected>3%</option><option value="4">4%</option><option value="5">5%</option>
+            </select>
         </div>
         <div class="control-group">
             <label>Provider Fee (%)</label>
-            <select id="ctrl-fee"></select>
+            <select id="ctrl-fee">
+                <option value="0.5">0.5%</option><option value="1" selected>1%</option>
+            </select>
         </div>
         <div class="control-group">
             <label>Mode</label>
             <select id="ctrl-mode">
-                <option value="block">Block</option>
+                <option value="block">Block (fixed intervals)</option>
                 <option value="rolling">Rolling (per-customer)</option>
             </select>
         </div>
         <div class="target-margin" id="target-margin">💰 Target margin: 2.00%</div>
     </div>
 
-    <!-- Tabs -->
     <div class="tabs" id="tabs">
         <div class="tab active" data-tab="comparison">📊 Window Comparison</div>
         <div class="tab" data-tab="deepdive">🔍 Deep Dive</div>
@@ -434,16 +351,15 @@
         <div class="tab" data-tab="methodology">📖 Methodology</div>
     </div>
 
-    <div class="tab-panels">
     <!-- Tab: Comparison -->
     <div class="tab-content active" id="tab-comparison">
         <div class="kpi-row" id="comparison-kpis"></div>
         <div class="chart-row">
-            <div class="chart-box"><div id="chart-margin-risk"></div></div>
-            <div class="chart-box"><div id="chart-gmv"></div></div>
+            <div class="chart-box"><canvas id="chart-margin-risk"></canvas></div>
+            <div class="chart-box"><canvas id="chart-gmv"></canvas></div>
         </div>
         <div class="chart-row">
-            <div class="chart-box full"><div id="chart-margin-bars"></div></div>
+            <div class="chart-box full"><canvas id="chart-margin-bars"></canvas></div>
         </div>
         <div class="toggle-row">
             <button class="toggle-btn" onclick="toggleTable('comparison-table')">Show raw comparison data</button>
@@ -461,12 +377,12 @@
         </div>
         <div class="kpi-row" id="dd-kpis"></div>
         <div class="chart-row">
-            <div class="chart-box"><div id="chart-dd-margin-dist"></div></div>
-            <div class="chart-box"><div id="chart-dd-deviation-dist"></div></div>
+            <div class="chart-box"><canvas id="chart-dd-margin-dist"></canvas></div>
+            <div class="chart-box"><canvas id="chart-dd-deviation-dist"></canvas></div>
         </div>
         <div class="chart-row">
-            <div class="chart-box"><div id="chart-dd-hourly-margin"></div></div>
-            <div class="chart-box"><div id="chart-dd-hourly-vol"></div></div>
+            <div class="chart-box"><canvas id="chart-dd-hourly-margin"></canvas></div>
+            <div class="chart-box"><canvas id="chart-dd-hourly-vol"></canvas></div>
         </div>
     </div>
 
@@ -479,8 +395,7 @@
             </div>
         </div>
         <div class="chart-row">
-            <div class="chart-box"><div id="chart-route-top20"></div></div>
-            <div class="chart-box"><div id="chart-route-treemap"></div></div>
+            <div class="chart-box full"><canvas id="chart-route-top20"></canvas></div>
         </div>
         <div class="toggle-row">
             <button class="toggle-btn" onclick="toggleTable('route-table')">Show full route data</button>
@@ -492,11 +407,11 @@
     <div class="tab-content" id="tab-fxrates">
         <div class="kpi-row" id="fx-kpis"></div>
         <div class="chart-row">
-            <div class="chart-box full"><div id="chart-fx-rate"></div></div>
+            <div class="chart-box full"><canvas id="chart-fx-rate"></canvas></div>
         </div>
         <div class="chart-row">
-            <div class="chart-box"><div id="chart-fx-volatility"></div></div>
-            <div class="chart-box"><div id="chart-fx-hourly"></div></div>
+            <div class="chart-box"><canvas id="chart-fx-volatility"></canvas></div>
+            <div class="chart-box"><canvas id="chart-fx-hourly"></canvas></div>
         </div>
     </div>
 
@@ -622,86 +537,63 @@ Customer C:       ●━━━━━━●</pre></td>
             </table>
         </div>
     </div>
-    </div> <!-- close tab-panels -->
 </div>
 
 <script>
 // ── Global State ──────────────────────────────
 let DATA = null;
-const PLOTLY_LAYOUT = {
-    paper_bgcolor: '#1e293b',
-    plot_bgcolor: '#1e293b',
-    font: { color: '#94a3b8', family: 'Inter', size: 12 },
-    margin: { l: 50, r: 30, t: 35, b: 40 },
-    xaxis: { gridcolor: '#334155', zerolinecolor: '#334155' },
-    yaxis: { gridcolor: '#334155', zerolinecolor: '#334155' },
-};
-const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
 const COLORS = {
-    blue: '#6366f1',
-    lightBlue: '#818cf8',
-    orange: '#f59e0b',
-    green: '#22c55e',
-    red: '#ef4444',
-    purple: '#a855f7',
-    teal: '#14b8a6',
-    pink: '#ec4899',
+    blue: '#6366f1', lightBlue: '#818cf8', orange: '#f59e0b', green: '#22c55e',
+    red: '#ef4444', purple: '#a855f7', teal: '#14b8a6', pink: '#ec4899',
 };
 
-// ── Data Loading ──────────────────────────────
-async function loadData() {
-    const resp = await fetch('data/scenarios.json');
-    DATA = await resp.json();
-    initControls();
-    document.getElementById('loading').style.display = 'none';
-    renderAll();
+// Chart.js global defaults
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.font.family = 'Inter';
+Chart.defaults.font.size = 12;
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+Chart.defaults.scale.grid = { color: '#334155' };
+Chart.defaults.scale.border = { color: '#334155' };
+Chart.defaults.elements.bar.borderRadius = 4;
+Chart.defaults.animation.duration = 400;
+
+// Store chart instances for cleanup
+const _charts = {};
+function getChart(canvasId, config) {
+    if (_charts[canvasId]) _charts[canvasId].destroy();
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    _charts[canvasId] = new Chart(ctx, config);
+    return _charts[canvasId];
 }
 
-// ── Control Setup ─────────────────────────────
+// ── Data Loading ─────────────────────────────
+async function loadData() {
+    try {
+        const resp = await fetch('data/scenarios.json');
+        DATA = await resp.json();
+        initControls();
+        renderAll();
+        document.getElementById('loading').style.display = 'none';
+    } catch (e) {
+        document.getElementById('loading').innerHTML = `<div style="color:${COLORS.red};text-align:center;"><h3>Failed to load data</h3><p>${e.message}</p></div>`;
+    }
+}
+
+// ── Controls ──────────────────────────────────
 function initControls() {
-    const grid = DATA.parameter_grid;
-    const mkSel = document.getElementById('ctrl-markup');
-    grid.markups.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m + '%';
-        if (m === 3) opt.selected = true;
-        mkSel.appendChild(opt);
-    });
+    const windows = [...new Set(DATA.scenarios.map(s => s.window))];
+    const markups = [...new Set(DATA.scenarios.map(s => s.markup_pct))];
 
-    const feeSel = document.getElementById('ctrl-fee');
-    grid.provider_fees.forEach(f => {
-        const opt = document.createElement('option');
-        opt.value = f; opt.textContent = f + '%';
-        if (f === 1) opt.selected = true;
-        feeSel.appendChild(opt);
-    });
+    function fillSelect(id, opts, selected) {
+        const el = document.getElementById(id);
+        el.innerHTML = opts.map(o => `<option value="${o}" ${o == selected ? 'selected' : ''}>${o}</option>`).join('');
+    }
 
-    // Window selectors for Deep Dive, Routes, and Scenarios
-    ['dd-window', 'route-window', 'sc-a-window', 'sc-b-window'].forEach(id => {
-        const sel = document.getElementById(id);
-        grid.windows.forEach((w, i) => {
-            const opt = document.createElement('option');
-            opt.value = w; opt.textContent = w;
-            if (w === '1h') opt.selected = true;
-            sel.appendChild(opt);
-        });
-    });
+    ['dd-window', 'route-window', 'sc-a-window', 'sc-b-window'].forEach(id => fillSelect(id, windows, windows[0]));
+    ['sc-a-markup', 'sc-b-markup'].forEach(id => fillSelect(id, markups, 3));
 
-    // Scenario markup selectors
-    ['sc-a-markup', 'sc-b-markup'].forEach(id => {
-        const sel = document.getElementById(id);
-        grid.markups.forEach(m => {
-            const opt = document.createElement('option');
-            opt.value = m; opt.textContent = m + '%';
-            if (m === 3) opt.selected = true;
-            sel.appendChild(opt);
-        });
-    });
-
-    // Event listeners
-    mkSel.addEventListener('change', renderAll);
-    feeSel.addEventListener('change', renderAll);
-    document.getElementById('ctrl-mode').addEventListener('change', renderAll);
+    document.querySelectorAll('#ctrl-markup, #ctrl-fee, #ctrl-mode').forEach(el => el.addEventListener('change', renderAll));
     document.getElementById('dd-window').addEventListener('change', renderDeepDive);
     document.getElementById('route-window').addEventListener('change', renderRoutes);
 
@@ -725,27 +617,17 @@ function getGlobalParams() {
     };
 }
 
-function findScenario(window, markup, fee, mode) {
-    return DATA.scenarios.find(s =>
-        s.window === window &&
-        s.markup_pct === markup &&
-        s.provider_fee_pct === fee &&
-        s.mode === mode
-    );
-}
-
 function getFilteredScenarios() {
     const p = getGlobalParams();
-    return DATA.scenarios.filter(s =>
-        s.markup_pct === p.markup &&
-        s.provider_fee_pct === p.fee &&
-        s.mode === p.mode
-    ).sort((a, b) => a.window_min - b.window_min);
+    return DATA.scenarios.filter(s => s.markup_pct === p.markup && s.fee_pct === p.fee && s.mode === p.mode);
 }
 
-function fmt$(n) { return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 }); }
-function fmtPct(n) { return n.toFixed(2) + '%'; }
+function findScenario(window, markup, fee, mode) {
+    return DATA.scenarios.find(s => s.window === window && s.markup_pct === markup && s.fee_pct === fee && s.mode === mode);
+}
 
+function fmt$(v) { return '$' + Math.round(v).toLocaleString(); }
+function fmtPct(v) { return v.toFixed(2) + '%'; }
 function makeKPI(label, value, sub) {
     return `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
 }
@@ -776,40 +658,49 @@ function renderComparison() {
 
     const windows = scenarios.map(s => s.window);
 
-    // Margin vs Risk chart
-    Plotly.newPlot('chart-margin-risk', [
-        { x: windows, y: scenarios.map(s => s.avg_margin_pct), type: 'bar', name: 'Avg Margin %', marker: { color: COLORS.blue } },
-        { x: windows, y: scenarios.map(s => s.margin_at_risk_pct), type: 'scatter', mode: 'lines+markers', name: 'Margin at Risk %', yaxis: 'y2', line: { color: COLORS.orange, width: 2 }, marker: { size: 6 } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Average Margin vs Risk by Fixation Window', font: { size: 14 } },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Avg Margin %', tickformat: '.2f' },
-        yaxis2: { title: 'Margin at Risk %', overlaying: 'y', side: 'right', gridcolor: 'transparent', tickformat: '.2f', titlefont: { color: COLORS.orange }, tickfont: { color: COLORS.orange } },
-        legend: { x: 0.3, y: 1.18, orientation: 'h', font: { size: 11 } },
-        margin: { l: 60, r: 60, t: 50, b: 40 },
-    }, PLOTLY_CONFIG);
+    // Margin vs Risk chart (dual axis)
+    getChart('chart-margin-risk', {
+        type: 'bar',
+        data: {
+            labels: windows,
+            datasets: [
+                { label: 'Avg Margin %', data: scenarios.map(s => s.avg_margin_pct), backgroundColor: COLORS.blue, yAxisID: 'y', order: 2 },
+                { label: 'Margin at Risk %', data: scenarios.map(s => s.margin_at_risk_pct), type: 'line', borderColor: COLORS.orange, backgroundColor: COLORS.orange, pointRadius: 5, pointHoverRadius: 7, borderWidth: 2, yAxisID: 'y1', order: 1 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Average Margin vs Risk by Fixation Window' } },
+            scales: {
+                y: { title: { display: true, text: 'Avg Margin %' }, ticks: { callback: v => v.toFixed(2) } },
+                y1: { position: 'right', title: { display: true, text: 'Margin at Risk %', color: COLORS.orange }, ticks: { color: COLORS.orange, callback: v => v.toFixed(2) }, grid: { drawOnChartArea: false } },
+            }
+        }
+    });
 
     // GMV chart
-    Plotly.newPlot('chart-gmv', [
-        { x: windows, y: scenarios.map(s => s.total_gmv), type: 'bar', marker: { color: COLORS.teal } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Total GMV (USD) by Fixation Window', font: { size: 14 } },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'GMV (USD)', tickprefix: '$', tickformat: ',.0f' },
-        margin: { l: 90, r: 30, t: 50, b: 40 },
-    }, PLOTLY_CONFIG);
+    getChart('chart-gmv', {
+        type: 'bar',
+        data: { labels: windows, datasets: [{ label: 'Total GMV (USD)', data: scenarios.map(s => s.total_gmv), backgroundColor: COLORS.teal }] },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Total GMV (USD) by Fixation Window' }, legend: { display: false } },
+            scales: { y: { title: { display: true, text: 'GMV (USD)' }, ticks: { callback: v => '$' + (v / 1e6).toFixed(1) + 'M' } } }
+        }
+    });
 
-    // Margin breakdown bar
-    Plotly.newPlot('chart-margin-bars', [
-        { x: windows, y: scenarios.map(s => s.total_margin), type: 'bar', name: 'Total Margin $', marker: { color: COLORS.purple } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Total Margin (USD) by Fixation Window', font: { size: 14 } },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Margin (USD)', tickprefix: '$', tickformat: ',.0f' },
-        margin: { l: 90, r: 30, t: 50, b: 40 },
-    }, PLOTLY_CONFIG);
+    // Margin bars
+    getChart('chart-margin-bars', {
+        type: 'bar',
+        data: { labels: windows, datasets: [{ label: 'Total Margin (USD)', data: scenarios.map(s => s.total_margin), backgroundColor: COLORS.purple }] },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Total Margin (USD) by Fixation Window' }, legend: { display: false } },
+            scales: { y: { title: { display: true, text: 'Margin (USD)' }, ticks: { callback: v => '$' + (v / 1e6).toFixed(2) + 'M' } } }
+        }
+    });
 
-    // Raw data table
+    // Table
     let html = '<table class="data-table"><tr><th>Window</th><th>Total GMV</th><th>Total Margin</th><th>Avg Margin %</th><th>Margin at Risk %</th><th>Negative Txn</th></tr>';
     scenarios.forEach(s => {
         html += `<tr><td>${s.window}</td><td>${fmt$(s.total_gmv)}</td><td>${fmt$(s.total_margin)}</td><td>${fmtPct(s.avg_margin_pct)}</td><td>${fmtPct(s.margin_at_risk_pct)}</td><td>${s.negative_margin_txn}</td></tr>`;
@@ -833,51 +724,62 @@ function renderDeepDive() {
 
     // Margin distribution
     const md = s.margin_distribution;
-    const mdX = md.edges.slice(0, -1).map((e, i) => ((e + md.edges[i + 1]) / 2));
-    Plotly.newPlot('chart-dd-margin-dist', [
-        { x: mdX, y: md.counts, type: 'bar', marker: { color: COLORS.blue } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Margin Distribution (%)', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Margin %' },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Transactions', tickformat: ',.0f' },
-    }, PLOTLY_CONFIG);
+    const mdX = md.edges.slice(0, -1).map((e, i) => ((e + md.edges[i + 1]) / 2).toFixed(2));
+    getChart('chart-dd-margin-dist', {
+        type: 'bar',
+        data: { labels: mdX, datasets: [{ label: 'Transactions', data: md.counts, backgroundColor: COLORS.blue }] },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Margin Distribution (%)' }, legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'Margin %' } }, y: { title: { display: true, text: 'Transactions' } } }
+        }
+    });
 
     // Deviation distribution
     const dd = s.deviation_distribution;
-    const ddX = dd.edges.slice(0, -1).map((e, i) => ((e + dd.edges[i + 1]) / 2));
-    Plotly.newPlot('chart-dd-deviation-dist', [
-        { x: ddX, y: dd.counts, type: 'bar', marker: { color: COLORS.orange } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Rate Deviation Distribution (%)', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Deviation from fixed rate %' },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Transactions', tickformat: ',.0f' },
-    }, PLOTLY_CONFIG);
+    const ddX = dd.edges.slice(0, -1).map((e, i) => ((e + dd.edges[i + 1]) / 2).toFixed(3));
+    getChart('chart-dd-deviation-dist', {
+        type: 'bar',
+        data: { labels: ddX, datasets: [{ label: 'Transactions', data: dd.counts, backgroundColor: COLORS.orange }] },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Rate Deviation Distribution (%)' }, legend: { display: false } },
+            scales: { x: { title: { display: true, text: 'Deviation %' } }, y: { title: { display: true, text: 'Transactions' } } }
+        }
+    });
 
     // Hourly margin
     const hours = s.hourly.map(h => h.hour);
-    Plotly.newPlot('chart-dd-hourly-margin', [
-        { x: hours, y: s.hourly.map(h => h.avg_margin_pct), type: 'scatter', mode: 'lines+markers', line: { color: COLORS.green, width: 2 }, marker: { size: 5 } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Average Margin by Hour (UTC)', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 2 },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Avg Margin %', tickformat: '.2f' },
-    }, PLOTLY_CONFIG);
+    getChart('chart-dd-hourly-margin', {
+        type: 'line',
+        data: { labels: hours, datasets: [{ label: 'Avg Margin %', data: s.hourly.map(h => h.avg_margin_pct), borderColor: COLORS.green, backgroundColor: COLORS.green + '33', fill: true, pointRadius: 3, borderWidth: 2 }] },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Average Margin by Hour (UTC)' } },
+            scales: { x: { title: { display: true, text: 'Hour (UTC)' } }, y: { title: { display: true, text: 'Avg Margin %' }, ticks: { callback: v => v.toFixed(2) } } }
+        }
+    });
 
-    // Hourly volatility
-    Plotly.newPlot('chart-dd-hourly-vol', [
-        { x: hours, y: s.hourly.map(h => h.volatility * 100), type: 'bar', marker: { color: COLORS.red, opacity: 0.7 } },
-        { x: hours, y: s.hourly.map(h => h.transaction_count), type: 'scatter', mode: 'lines+markers', name: 'Transactions', yaxis: 'y2', line: { color: COLORS.teal, width: 2 }, marker: { size: 4 } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Rate Volatility & Transaction Volume by Hour', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 2 },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Volatility %', tickformat: '.3f' },
-        yaxis2: { title: 'Transactions', overlaying: 'y', side: 'right', gridcolor: 'transparent', tickformat: ',.0f', titlefont: { color: COLORS.teal }, tickfont: { color: COLORS.teal } },
-        showlegend: false,
-    }, PLOTLY_CONFIG);
+    // Hourly volatility + transactions
+    getChart('chart-dd-hourly-vol', {
+        type: 'bar',
+        data: {
+            labels: hours,
+            datasets: [
+                { label: 'Volatility %', data: s.hourly.map(h => h.volatility * 100), backgroundColor: COLORS.red + 'aa', yAxisID: 'y', order: 2 },
+                { label: 'Transactions', data: s.hourly.map(h => h.transaction_count), type: 'line', borderColor: COLORS.teal, backgroundColor: COLORS.teal, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 1 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Rate Volatility & Transaction Volume by Hour' } },
+            scales: {
+                x: { title: { display: true, text: 'Hour (UTC)' } },
+                y: { title: { display: true, text: 'Volatility %' }, ticks: { callback: v => v.toFixed(3) } },
+                y1: { position: 'right', title: { display: true, text: 'Transactions', color: COLORS.teal }, ticks: { color: COLORS.teal }, grid: { drawOnChartArea: false } },
+            }
+        }
+    });
 }
 
 // ── Tab: Routes ───────────────────────────────
@@ -885,41 +787,30 @@ function renderRoutes() {
     const p = getGlobalParams();
     const window = document.getElementById('route-window').value;
     const s = findScenario(window, p.markup, p.fee, p.mode);
-    if (!s) return;
+    if (!s || !s.routes) return;
 
-    const top = s.top_routes.slice(0, 20);
+    const top20 = s.routes.slice(0, 20);
+    getChart('chart-route-top20', {
+        type: 'bar',
+        data: {
+            labels: top20.map(r => r.route),
+            datasets: [
+                { label: 'GMV ($)', data: top20.map(r => r.gmv), backgroundColor: COLORS.teal },
+                { label: 'Margin ($)', data: top20.map(r => r.margin), backgroundColor: COLORS.purple },
+            ]
+        },
+        options: {
+            responsive: true,
+            indexAxis: 'y',
+            plugins: { title: { display: true, text: 'Top 20 Routes by GMV' } },
+            scales: { x: { title: { display: true, text: 'USD' }, ticks: { callback: v => '$' + v.toLocaleString() } } }
+        }
+    });
 
-    // Top 20 routes bar
-    Plotly.newPlot('chart-route-top20', [
-        { y: top.map(r => r.route).reverse(), x: top.map(r => r.total_gmv).reverse(), type: 'bar', orientation: 'h', marker: { color: COLORS.blue } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Top 20 Routes by GMV', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'GMV (USD)' },
-        margin: { ...PLOTLY_LAYOUT.margin, l: 140 },
-        height: 500,
-    }, PLOTLY_CONFIG);
-
-    // Country treemap
-    const countries = s.countries;
-    Plotly.newPlot('chart-route-treemap', [{
-        type: 'treemap',
-        labels: countries.map(c => c.country),
-        parents: countries.map(() => ''),
-        values: countries.map(c => c.total_gmv),
-        text: countries.map(c => `${c.country}<br>GMV: ${fmt$(c.total_gmv)}<br>Margin: ${fmtPct(c.avg_margin_pct)}`),
-        textinfo: 'label+text',
-        marker: { colors: countries.map(c => c.avg_margin_pct), colorscale: 'Viridis', showscale: true, colorbar: { title: 'Margin %', ticksuffix: '%' } },
-    }], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'GMV by Destination Country', font: { size: 14 } },
-        height: 500,
-    }, PLOTLY_CONFIG);
-
-    // Route table
-    let html = '<table class="data-table"><tr><th>Route</th><th>Country</th><th>Avg Price €</th><th>Avg Margin %</th><th>GMV</th><th>Margin</th><th>Txn</th></tr>';
-    s.top_routes.forEach(r => {
-        html += `<tr><td>${r.route}</td><td>${r.country}</td><td>€${r.avg_price_eur}</td><td>${fmtPct(r.avg_margin_pct)}</td><td>${fmt$(r.total_gmv)}</td><td>${fmt$(r.total_margin)}</td><td>${r.txn_count}</td></tr>`;
+    // Table
+    let html = '<table class="data-table"><tr><th>Route</th><th>GMV</th><th>Margin</th><th>Margin %</th><th>Txn</th></tr>';
+    s.routes.forEach(r => {
+        html += `<tr><td>${r.route}</td><td>${fmt$(r.gmv)}</td><td>${fmt$(r.margin)}</td><td>${fmtPct(r.margin_pct)}</td><td>${r.transactions}</td></tr>`;
     });
     html += '</table>';
     document.getElementById('route-table').innerHTML = html;
@@ -931,148 +822,140 @@ function renderFXRates() {
 
     const rates = DATA.fx_rates;
     const len = rates.length;
-    const timestamps = new Array(len);
-    const values = new Array(len);
-    for (let i = 0; i < len; i++) {
-        timestamps[i] = rates[i].timestamp;
-        values[i] = rates[i].rate;
+
+    // Downsample for chart performance: take every 4th point (~1500 points)
+    const step = 4;
+    const ts = [], vals = [];
+    for (let i = 0; i < len; i += step) {
+        ts.push(rates[i].timestamp);
+        vals.push(rates[i].rate);
     }
 
-    // KPIs — avoid Math.min/max spread on 6k elements (stack overflow)
-    let min = values[0], max = values[0], sum = 0;
-    for (let i = 0; i < len; i++) {
-        if (values[i] < min) min = values[i];
-        if (values[i] > max) max = values[i];
-        sum += values[i];
+    // KPIs
+    let min = vals[0], max = vals[0], sum = 0;
+    for (let i = 0; i < vals.length; i++) {
+        if (vals[i] < min) min = vals[i];
+        if (vals[i] > max) max = vals[i];
+        sum += vals[i];
     }
-    const avg = sum / len;
 
     document.getElementById('fx-kpis').innerHTML =
         makeKPI('Data Points', len.toLocaleString(), '') +
         makeKPI('Rate Range', `${min.toFixed(4)} – ${max.toFixed(4)}`, '') +
-        makeKPI('Average Rate', avg.toFixed(4), '') +
-        makeKPI('Period', `${timestamps[0].split('T')[0]} → ${timestamps[len - 1].split('T')[0]}`, '');
+        makeKPI('Average Rate', (sum / vals.length).toFixed(4), '') +
+        makeKPI('Period', `${ts[0].split('T')[0]} → ${ts[ts.length - 1].split('T')[0]}`, '');
 
-    // Moving averages with simple loop
-    function movingAvg(arr, n) {
-        const result = new Array(arr.length);
-        let runSum = 0;
-        for (let i = 0; i < arr.length; i++) {
-            runSum += arr[i];
-            if (i >= n) runSum -= arr[i - n];
-            const count = Math.min(i + 1, n);
-            result[i] = runSum / count;
-        }
-        return result;
-    }
-
-    Plotly.newPlot('chart-fx-rate', [
-        { x: timestamps, y: values, type: 'scattergl', mode: 'lines', name: 'EUR/USD (15-min)', line: { color: COLORS.blue, width: 1 } },
-        { x: timestamps, y: movingAvg(values, 4), type: 'scattergl', mode: 'lines', name: '1h MA', line: { color: COLORS.green, width: 1.5 } },
-        { x: timestamps, y: movingAvg(values, 96), type: 'scattergl', mode: 'lines', name: '24h MA', line: { color: COLORS.orange, width: 2 } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'EUR/USD Exchange Rate (90 Days, 15-min intervals)', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Date' },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'EUR/USD Rate', tickformat: '.4f', hoverformat: '.6f' },
-        legend: { x: 0.65, y: 1.15, orientation: 'h' },
-        margin: { l: 70, r: 30, t: 45, b: 40 },
-        height: 400,
-    }, PLOTLY_CONFIG);
-
-    // Calculate returns (% changes)
-    const returns = new Array(len);
-    returns[0] = 0;
-    for (let i = 1; i < len; i++) {
-        returns[i] = (values[i] - values[i - 1]) / values[i - 1];
-    }
-
-    // Rolling volatility (24h = 96 points, std dev of returns)
-    const vol = new Array(len);
-    for (let i = 0; i < len; i++) {
-        const start = Math.max(1, i - 95);
-        const end = i + 1;
-        const n = end - start;
-        if (n < 2) { vol[i] = 0; continue; }
+    // Moving average (24h ~= 24 points at 4x downsample)
+    function ma(arr, n) {
+        const r = [];
         let s = 0;
-        for (let j = start; j < end; j++) s += returns[j];
-        const m = s / n;
-        let v = 0;
-        for (let j = start; j < end; j++) v += (returns[j] - m) ** 2;
-        vol[i] = Math.sqrt(v / n) * 100;
+        for (let i = 0; i < arr.length; i++) {
+            s += arr[i];
+            if (i >= n) s -= arr[i - n];
+            r.push(s / Math.min(i + 1, n));
+        }
+        return r;
     }
 
-    Plotly.newPlot('chart-fx-volatility', [
-        { x: timestamps, y: vol, type: 'scattergl', mode: 'lines', fill: 'tozeroy', line: { color: COLORS.red, width: 1 }, fillcolor: 'rgba(239,68,68,0.15)' },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: '24h Rolling Volatility', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Date' },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Volatility (%)', tickformat: '.3f' },
-        margin: { l: 60, r: 30, t: 45, b: 40 },
-        height: 300,
-    }, PLOTLY_CONFIG);
+    // Rate chart
+    getChart('chart-fx-rate', {
+        type: 'line',
+        data: {
+            labels: ts,
+            datasets: [
+                { label: 'EUR/USD', data: vals, borderColor: COLORS.blue, borderWidth: 1, pointRadius: 0, tension: 0 },
+                { label: '24h MA', data: ma(vals, 24), borderColor: COLORS.orange, borderWidth: 2, pointRadius: 0, tension: 0 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'EUR/USD Exchange Rate (90 Days)' }, legend: { position: 'top' } },
+            scales: {
+                x: { type: 'time', time: { unit: 'week' }, title: { display: true, text: 'Date' } },
+                y: { title: { display: true, text: 'EUR/USD Rate' }, ticks: { callback: v => v.toFixed(4) } }
+            }
+        }
+    });
 
-    // Hourly intraday volatility bar chart
+    // Rolling volatility (returns-based)
+    const rets = [0];
+    for (let i = 1; i < vals.length; i++) rets.push((vals[i] - vals[i - 1]) / vals[i - 1]);
+
+    const vol = [];
+    const volWindow = 24;
+    for (let i = 0; i < vals.length; i++) {
+        const start = Math.max(1, i - volWindow + 1);
+        const n = i + 1 - start;
+        if (n < 2) { vol.push(0); continue; }
+        let sm = 0;
+        for (let j = start; j <= i; j++) sm += rets[j];
+        const m = sm / n;
+        let v = 0;
+        for (let j = start; j <= i; j++) v += (rets[j] - m) ** 2;
+        vol.push(Math.sqrt(v / n) * 100);
+    }
+
+    getChart('chart-fx-volatility', {
+        type: 'line',
+        data: { labels: ts, datasets: [{ label: '24h Rolling Volatility (%)', data: vol, borderColor: COLORS.red, backgroundColor: COLORS.red + '22', fill: true, borderWidth: 1, pointRadius: 0 }] },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: '24h Rolling Volatility' } },
+            scales: {
+                x: { type: 'time', time: { unit: 'week' }, title: { display: true, text: 'Date' } },
+                y: { title: { display: true, text: 'Volatility (%)' }, ticks: { callback: v => v.toFixed(3) } }
+            }
+        }
+    });
+
+    // Hourly intraday volatility
     const hourlyRetSum = new Array(24).fill(0);
     const hourlyCount = new Array(24).fill(0);
     for (let i = 1; i < len; i++) {
-        const d = new Date(timestamps[i]);
-        const h = d.getUTCHours();
-        hourlyRetSum[h] += Math.abs(returns[i]);
+        const ret = Math.abs((rates[i].rate - rates[i - 1].rate) / rates[i - 1].rate);
+        const h = new Date(rates[i].timestamp).getUTCHours();
+        hourlyRetSum[h] += ret;
         hourlyCount[h]++;
     }
-    const avgHourlyVol = new Array(24);
+    const avgHourlyVol = [];
     let avgTotal = 0;
     for (let h = 0; h < 24; h++) {
-        avgHourlyVol[h] = hourlyCount[h] > 0 ? (hourlyRetSum[h] / hourlyCount[h]) * 100 : 0;
-        avgTotal += avgHourlyVol[h];
+        const v = hourlyCount[h] > 0 ? (hourlyRetSum[h] / hourlyCount[h]) * 100 : 0;
+        avgHourlyVol.push(v);
+        avgTotal += v;
     }
     const avgThreshold = avgTotal / 24;
-    const barColors = new Array(24);
-    for (let h = 0; h < 24; h++) {
-        barColors[h] = avgHourlyVol[h] > avgThreshold ? COLORS.orange : COLORS.green;
-    }
 
-    Plotly.newPlot('chart-fx-hourly', [
-        { x: Array.from({ length: 24 }, (_, i) => i), y: avgHourlyVol, type: 'bar', marker: { color: barColors } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Avg Intraday Volatility by Hour (UTC)', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 1 },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Volatility (%)', tickformat: '.4f' },
-        margin: { l: 60, r: 30, t: 45, b: 40 },
-        height: 300,
-    }, PLOTLY_CONFIG);
+    getChart('chart-fx-hourly', {
+        type: 'bar',
+        data: {
+            labels: Array.from({ length: 24 }, (_, i) => i),
+            datasets: [{ label: 'Avg Volatility (%)', data: avgHourlyVol, backgroundColor: avgHourlyVol.map(v => v > avgThreshold ? COLORS.orange : COLORS.green) }]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Avg Intraday Volatility by Hour (UTC)' }, legend: { display: false } },
+            scales: {
+                x: { title: { display: true, text: 'Hour (UTC)' } },
+                y: { title: { display: true, text: 'Volatility (%)' }, ticks: { callback: v => v.toFixed(4) } }
+            }
+        }
+    });
 }
 
 // ── Tab: Scenario Comparison ──────────────────
 function runScenarioComparison() {
-    const fee = parseFloat(document.getElementById('ctrl-fee').value);
-    const sA = findScenario(
-        document.getElementById('sc-a-window').value,
-        parseFloat(document.getElementById('sc-a-markup').value),
-        fee,
-        document.getElementById('sc-a-mode').value
-    );
-    const sB = findScenario(
-        document.getElementById('sc-b-window').value,
-        parseFloat(document.getElementById('sc-b-markup').value),
-        fee,
-        document.getElementById('sc-b-mode').value
-    );
-
-    if (!sA || !sB) {
-        document.getElementById('scenario-results').innerHTML = '<p style="color:var(--danger);">Scenario not found in pre-computed data. Try different parameters.</p>';
-        return;
-    }
+    const p = getGlobalParams();
+    const sA = findScenario(document.getElementById('sc-a-window').value, parseFloat(document.getElementById('sc-a-markup').value), p.fee, document.getElementById('sc-a-mode').value);
+    const sB = findScenario(document.getElementById('sc-b-window').value, parseFloat(document.getElementById('sc-b-markup').value), p.fee, document.getElementById('sc-b-mode').value);
+    if (!sA || !sB) return;
 
     const metrics = [
-        { label: 'Total GMV', a: fmt$(sA.total_gmv), b: fmt$(sB.total_gmv) },
-        { label: 'Total Margin', a: fmt$(sA.total_margin), b: fmt$(sB.total_margin) },
         { label: 'Avg Margin %', a: fmtPct(sA.avg_margin_pct), b: fmtPct(sB.avg_margin_pct) },
         { label: 'Margin at Risk %', a: fmtPct(sA.margin_at_risk_pct), b: fmtPct(sB.margin_at_risk_pct) },
-        { label: 'Negative Margin Txn', a: sA.negative_margin_txn, b: sB.negative_margin_txn },
+        { label: 'Total GMV', a: fmt$(sA.total_gmv), b: fmt$(sB.total_gmv) },
+        { label: 'Total Margin', a: fmt$(sA.total_margin), b: fmt$(sB.total_margin) },
+        { label: 'Negative Txn', a: sA.negative_margin_txn, b: sB.negative_margin_txn },
     ];
 
     let html = '<table class="data-table"><tr><th>Metric</th><th>Scenario A</th><th>Scenario B</th><th>Difference</th></tr>';
@@ -1086,39 +969,45 @@ function runScenarioComparison() {
     });
     html += '</table>';
 
-    // Add charts
-    html += '<div class="chart-row" style="margin-top:1rem;"><div class="chart-box"><div id="chart-sc-hourly"></div></div><div class="chart-box"><div id="chart-sc-margins"></div></div></div>';
-
+    html += '<div class="chart-row" style="margin-top:1rem;"><div class="chart-box"><canvas id="chart-sc-hourly"></canvas></div><div class="chart-box"><canvas id="chart-sc-margins"></canvas></div></div>';
     document.getElementById('scenario-results').innerHTML = html;
 
     // Hourly comparison
-    Plotly.newPlot('chart-sc-hourly', [
-        { x: sA.hourly.map(h => h.hour), y: sA.hourly.map(h => h.avg_margin_pct), name: 'A: ' + sA.window, type: 'scatter', mode: 'lines+markers', line: { color: COLORS.blue }, marker: { size: 5 } },
-        { x: sB.hourly.map(h => h.hour), y: sB.hourly.map(h => h.avg_margin_pct), name: 'B: ' + sB.window, type: 'scatter', mode: 'lines+markers', line: { color: COLORS.orange }, marker: { size: 5 } },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Hourly Margin Comparison', font: { size: 14 } },
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Hour (UTC)', dtick: 2 },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Avg Margin %' },
-        legend: { x: 0, y: 1.15, orientation: 'h' },
-    }, PLOTLY_CONFIG);
+    getChart('chart-sc-hourly', {
+        type: 'line',
+        data: {
+            labels: sA.hourly.map(h => h.hour),
+            datasets: [
+                { label: 'A: ' + sA.window, data: sA.hourly.map(h => h.avg_margin_pct), borderColor: COLORS.blue, pointRadius: 3, borderWidth: 2 },
+                { label: 'B: ' + sB.window, data: sB.hourly.map(h => h.avg_margin_pct), borderColor: COLORS.orange, pointRadius: 3, borderWidth: 2 },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Hourly Margin Comparison' } },
+            scales: { x: { title: { display: true, text: 'Hour (UTC)' } }, y: { title: { display: true, text: 'Avg Margin %' }, ticks: { callback: v => v.toFixed(2) } } }
+        }
+    });
 
     // Margin distribution comparison
     const mdA = sA.margin_distribution;
     const mdB = sB.margin_distribution;
-    const mdAx = mdA.edges.slice(0, -1).map((e, i) => ((e + mdA.edges[i + 1]) / 2));
-    const mdBx = mdB.edges.slice(0, -1).map((e, i) => ((e + mdB.edges[i + 1]) / 2));
-    Plotly.newPlot('chart-sc-margins', [
-        { x: mdAx, y: mdA.counts, name: 'A', type: 'bar', marker: { color: COLORS.blue }, opacity: 0.6 },
-        { x: mdBx, y: mdB.counts, name: 'B', type: 'bar', marker: { color: COLORS.orange }, opacity: 0.6 },
-    ], {
-        ...PLOTLY_LAYOUT,
-        title: { text: 'Margin Distribution Comparison', font: { size: 14 } },
-        barmode: 'overlay',
-        xaxis: { ...PLOTLY_LAYOUT.xaxis, title: 'Margin %' },
-        yaxis: { ...PLOTLY_LAYOUT.yaxis, title: 'Transactions' },
-        legend: { x: 0, y: 1.15, orientation: 'h' },
-    }, PLOTLY_CONFIG);
+    const mdAx = mdA.edges.slice(0, -1).map((e, i) => ((e + mdA.edges[i + 1]) / 2).toFixed(2));
+    getChart('chart-sc-margins', {
+        type: 'bar',
+        data: {
+            labels: mdAx,
+            datasets: [
+                { label: 'A', data: mdA.counts, backgroundColor: COLORS.blue + '99' },
+                { label: 'B', data: mdB.counts, backgroundColor: COLORS.orange + '99' },
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: { title: { display: true, text: 'Margin Distribution Comparison' } },
+            scales: { x: { title: { display: true, text: 'Margin %' } }, y: { title: { display: true, text: 'Transactions' } } }
+        }
+    });
 }
 
 // ── Utilities ─────────────────────────────────

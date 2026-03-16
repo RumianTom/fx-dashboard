@@ -695,7 +695,7 @@ function initControls() {
             const tabEl = document.getElementById('tab-' + tab.dataset.tab);
             tabEl.classList.add('active');
             // Render the newly visible tab
-            renderActiveTab(tab.dataset.tab);
+            showTab(tab.dataset.tab);
         });
     });
 }
@@ -738,28 +738,36 @@ function makeKPI(label, value, sub) {
 function renderAll() {
     const p = getGlobalParams();
     document.getElementById('target-margin').textContent = `💰 Target margin: ${(p.markup - p.fee).toFixed(2)}%`;
-    // Only render the currently active tab
+    // Mark all param-dependent tabs dirty so they re-render when visited
+    _tabDirty.comparison = true;
+    _tabDirty.deepdive = true;
+    _tabDirty.routes = true;
+    _tabDirty.scenario = true;
+    // Render whichever tab is currently active
     const activeTab = document.querySelector('.tab.active');
-    if (activeTab) renderActiveTab(activeTab.dataset.tab);
+    if (activeTab) showTab(activeTab.dataset.tab);
 }
 
-let _fxRendered = false;
-function renderActiveTab(tabName) {
-    switch (tabName) {
-        case 'comparison': renderComparison(); break;
-        case 'deepdive': renderDeepDive(); break;
-        case 'routes': renderRoutes(); break;
-        case 'fxrates':
-            if (!_fxRendered) {
-                renderFXRates();
-                _fxRendered = true;
-            } else {
-                // Just resize existing charts — don't re-render
-                const tabEl = document.getElementById('tab-fxrates');
-                tabEl.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
-            }
-            break;
-        // scenario and methodology don't need re-rendering on param change
+// Track which tabs need re-rendering
+const _tabDirty = { comparison: true, deepdive: true, routes: true, fxrates: true, scenario: true };
+
+function showTab(tabName) {
+    // Only render if dirty (params changed or first visit)
+    if (_tabDirty[tabName]) {
+        switch (tabName) {
+            case 'comparison': renderComparison(); break;
+            case 'deepdive': renderDeepDive(); break;
+            case 'routes': renderRoutes(); break;
+            case 'fxrates': renderFXRates(); break;
+            // scenario renders via its own button
+        }
+        _tabDirty[tabName] = false;
+    } else {
+        // Just resize existing charts (they were hidden, Plotly needs to recalculate)
+        const tabEl = document.getElementById('tab-' + tabName);
+        if (tabEl) {
+            tabEl.querySelectorAll('.js-plotly-plot').forEach(p => Plotly.Plots.resize(p));
+        }
     }
 }
 

@@ -211,17 +211,14 @@
             border-radius: 12px;
             padding: 1rem;
             position: relative;
+            min-height: 350px;
         }
 
-        .chart-box.full { grid-column: 1 / -1; }
+        .chart-box.full { grid-column: 1 / -1; min-height: 400px; }
 
         .chart-box canvas {
             width: 100% !important;
-            max-height: 350px;
-        }
-
-        .chart-box.full canvas {
-            max-height: 400px;
+            height: 100% !important;
         }
 
         .sub-controls {
@@ -562,6 +559,10 @@ Chart.defaults.animation.duration = 400;
 const _charts = {};
 function getChart(canvasId, config) {
     if (_charts[canvasId]) _charts[canvasId].destroy();
+    // Force responsive sizing from container (not aspect ratio)
+    if (!config.options) config.options = {};
+    config.options.responsive = true;
+    config.options.maintainAspectRatio = false;
     const ctx = document.getElementById(canvasId).getContext('2d');
     _charts[canvasId] = new Chart(ctx, config);
     return _charts[canvasId];

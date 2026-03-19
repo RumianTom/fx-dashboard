@@ -593,9 +593,18 @@ function initControls() {
     ['dd-window', 'route-window', 'sc-a-window', 'sc-b-window'].forEach(id => fillSelect(id, windows, windows[0]));
     ['sc-a-markup', 'sc-b-markup'].forEach(id => fillSelect(id, markups, 3));
 
-    document.querySelectorAll('#ctrl-markup, #ctrl-fee, #ctrl-mode').forEach(el => el.addEventListener('change', renderAll));
-    document.getElementById('dd-window').addEventListener('change', renderDeepDive);
-    document.getElementById('route-window').addEventListener('change', renderRoutes);
+    document.querySelectorAll('#ctrl-markup, #ctrl-fee, #ctrl-mode').forEach(el => el.addEventListener('change', () => {
+        _tabDirty = { comparison: true, deepdive: true, routes: true, fxrates: true };
+        renderAll();
+    }));
+    document.getElementById('dd-window').addEventListener('change', () => {
+        _tabDirty.deepdive = true;
+        showActiveTab();
+    });
+    document.getElementById('route-window').addEventListener('change', () => {
+        _tabDirty.routes = true;
+        showActiveTab();
+    });
 
     // Tab switching
     document.querySelectorAll('.tab').forEach(tab => {
@@ -604,6 +613,8 @@ function initControls() {
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             tab.classList.add('active');
             document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+            // Render AFTER the tab is visible (50ms for DOM to recalculate layout)
+            setTimeout(() => showActiveTab(), 50);
         });
     });
 }
@@ -632,14 +643,27 @@ function makeKPI(label, value, sub) {
     return `<div class="kpi-card"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ''}</div>`;
 }
 
-// ── Render All ────────────────────────────────
+// ── Lazy Rendering ───────────────────────────
+let _tabDirty = { comparison: true, deepdive: true, routes: true, fxrates: true };
+
 function renderAll() {
     const p = getGlobalParams();
     document.getElementById('target-margin').textContent = `💰 Target margin: ${(p.markup - p.fee).toFixed(2)}%`;
-    renderComparison();
-    renderDeepDive();
-    renderRoutes();
-    renderFXRates();
+    showActiveTab();
+}
+
+function showActiveTab() {
+    const activeTab = document.querySelector('.tab.active');
+    if (!activeTab) return;
+    const name = activeTab.dataset.tab;
+    if (!_tabDirty[name]) return;
+    switch (name) {
+        case 'comparison': renderComparison(); break;
+        case 'deepdive': renderDeepDive(); break;
+        case 'routes': renderRoutes(); break;
+        case 'fxrates': renderFXRates(); break;
+    }
+    _tabDirty[name] = false;
 }
 
 // ── Tab: Comparison ───────────────────────────

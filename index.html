@@ -211,10 +211,10 @@
             border-radius: 12px;
             padding: 1rem;
             position: relative;
-            min-height: 350px;
+            height: 350px;
         }
 
-        .chart-box.full { grid-column: 1 / -1; min-height: 400px; }
+        .chart-box.full { grid-column: 1 / -1; height: 400px; }
 
         .chart-box canvas {
             width: 100% !important;
@@ -544,14 +544,14 @@ const COLORS = {
     red: '#ef4444', purple: '#a855f7', teal: '#14b8a6', pink: '#ec4899',
 };
 
-// Chart.js global defaults
+// Chart.js global defaults (set individual props — do NOT replace entire objects)
 Chart.defaults.color = '#94a3b8';
 Chart.defaults.font.family = 'Inter';
 Chart.defaults.font.size = 12;
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
-Chart.defaults.scale.grid = { color: '#334155' };
-Chart.defaults.scale.border = { color: '#334155' };
+Chart.defaults.scale.grid.color = '#334155';
+Chart.defaults.scale.border.color = '#334155';
 Chart.defaults.elements.bar.borderRadius = 4;
 Chart.defaults.animation.duration = 400;
 
@@ -574,8 +574,14 @@ async function loadData() {
         const resp = await fetch('data/scenarios.json');
         DATA = await resp.json();
         initControls();
-        renderAll();
+        // Hide overlay FIRST so containers get real dimensions
         document.getElementById('loading').style.display = 'none';
+        // Wait for a paint frame, then render charts
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                renderAll();
+            });
+        });
     } catch (e) {
         document.getElementById('loading').innerHTML = `<div style="color:${COLORS.red};text-align:center;"><h3>Failed to load data</h3><p>${e.message}</p></div>`;
     }

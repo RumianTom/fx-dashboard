@@ -323,7 +323,7 @@
         <div class="control-group">
             <label>FX Markup (%)</label>
             <select id="ctrl-markup">
-                <option value="1">1%</option><option value="2">2%</option><option value="3" selected>3%</option><option value="4">4%</option><option value="5">5%</option>
+                <option value="1.5">1.5%</option><option value="2">2%</option><option value="2.5">2.5%</option><option value="3" selected>3%</option><option value="4">4%</option>
             </select>
         </div>
         <div class="control-group">
@@ -619,11 +619,11 @@ function getGlobalParams() {
 
 function getFilteredScenarios() {
     const p = getGlobalParams();
-    return DATA.scenarios.filter(s => s.markup_pct === p.markup && s.fee_pct === p.fee && s.mode === p.mode);
+    return DATA.scenarios.filter(s => s.markup_pct === p.markup && s.provider_fee_pct === p.fee && s.mode === p.mode);
 }
 
 function findScenario(window, markup, fee, mode) {
-    return DATA.scenarios.find(s => s.window === window && s.markup_pct === markup && s.fee_pct === fee && s.mode === mode);
+    return DATA.scenarios.find(s => s.window === window && s.markup_pct === markup && s.provider_fee_pct === fee && s.mode === mode);
 }
 
 function fmt$(v) { return '$' + Math.round(v).toLocaleString(); }
@@ -787,16 +787,16 @@ function renderRoutes() {
     const p = getGlobalParams();
     const window = document.getElementById('route-window').value;
     const s = findScenario(window, p.markup, p.fee, p.mode);
-    if (!s || !s.routes) return;
+    if (!s || !s.top_routes) return;
 
-    const top20 = s.routes.slice(0, 20);
+    const top20 = s.top_routes.slice(0, 20);
     getChart('chart-route-top20', {
         type: 'bar',
         data: {
             labels: top20.map(r => r.route),
             datasets: [
-                { label: 'GMV ($)', data: top20.map(r => r.gmv), backgroundColor: COLORS.teal },
-                { label: 'Margin ($)', data: top20.map(r => r.margin), backgroundColor: COLORS.purple },
+                { label: 'GMV ($)', data: top20.map(r => r.total_gmv), backgroundColor: COLORS.teal },
+                { label: 'Margin ($)', data: top20.map(r => r.total_margin), backgroundColor: COLORS.purple },
             ]
         },
         options: {
@@ -809,8 +809,8 @@ function renderRoutes() {
 
     // Table
     let html = '<table class="data-table"><tr><th>Route</th><th>GMV</th><th>Margin</th><th>Margin %</th><th>Txn</th></tr>';
-    s.routes.forEach(r => {
-        html += `<tr><td>${r.route}</td><td>${fmt$(r.gmv)}</td><td>${fmt$(r.margin)}</td><td>${fmtPct(r.margin_pct)}</td><td>${r.transactions}</td></tr>`;
+    s.top_routes.forEach(r => {
+        html += `<tr><td>${r.route}</td><td>${fmt$(r.total_gmv)}</td><td>${fmt$(r.total_margin)}</td><td>${fmtPct(r.avg_margin_pct)}</td><td>${r.txn_count}</td></tr>`;
     });
     html += '</table>';
     document.getElementById('route-table').innerHTML = html;
